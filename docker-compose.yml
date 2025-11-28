@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: price-compare-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - price-compare-network
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: price-compare-api
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - BLINKIT_API_KEY=${BLINKIT_API_KEY}
+      - ZEPTO_API_KEY=${ZEPTO_API_KEY}
+      - INSTAMART_API_KEY=${INSTAMART_API_KEY}
+      - BIGBASKET_API_KEY=${BIGBASKET_API_KEY}
+      - ZOMATO_API_KEY=${ZOMATO_API_KEY}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - price-compare-network
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: price-compare-web
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3001/api
+    depends_on:
+      - api
+    networks:
+      - price-compare-network
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+
+networks:
+  price-compare-network:
+    driver: bridge
